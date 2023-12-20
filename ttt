@@ -1,0 +1,274 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+
+class Game implements Serializable {
+    int id;
+    String gameName;
+    double price;
+    char forp;
+    double disc;
+
+    Game() {}
+
+    Game(String gameName, double price, char forp, double disc) {
+        this.gameName = gameName;
+        this.price = price;
+        this.forp = forp;
+        this.disc = disc;
+    }
+
+    void display() {
+        JOptionPane.showMessageDialog(null,
+                "Game Name: " + gameName + "\n" +
+                        "Price: Rs." + price + "\n" +
+                        "Free or Paid: " + (forp == 'F' ? "Free" : "Paid") + "\n" +
+                        "Discount Percentage: " + disc + "%\n" +
+                        "Price after Discount: Rs." + (price - (price * disc / 100)),
+                "Game Details", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    void saveToDatabase() {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:games.db")) {
+            String query = "INSERT INTO games (gameName, price, forp, disc) VALUES (?, ?, ?, ?)";
+            try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+                pstmt.setString(1, gameName);
+                pstmt.setDouble(2, price);
+                pstmt.setString(3, String.valueOf(forp));
+                pstmt.setDouble(4, disc);
+                pstmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    static ArrayList<Game> getAllGamesFromDatabase() {
+        ArrayList<Game> games = new ArrayList<>();
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:games.db")) {
+            String query = "SELECT * FROM games";
+            try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+                try (ResultSet resultSet = pstmt.executeQuery()) {
+                    while (resultSet.next()) {
+                        Game game = new Game();
+                        game.id = resultSet.getInt("id");
+                        game.gameName = resultSet.getString("gameName");
+                        game.price = resultSet.getDouble("price");
+                        game.forp = resultSet.getString("forp").charAt(0);
+                        game.disc = resultSet.getDouble("disc");
+                        games.add(game);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return games;
+    }
+}
+
+public class GameStoreGUI21 extends JFrame {
+    private final ArrayList<Game> games;
+
+    public GameStoreGUI21() {
+        games = Game.getAllGamesFromDatabase();
+        setTitle("Game Store");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(300, 200);
+        setLocationRelativeTo(null);
+
+        createMainMenu();
+    }
+
+    private void createMainMenu() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+
+        JButton insertButton = new JButton("Insert Game");
+        JButton viewButton = new JButton("View a Game");
+        JButton viewAllButton = new JButton("View All Games");
+        JButton updateButton = new JButton("Update Discount");
+        JButton exitButton = new JButton("Exit");
+
+        insertButton.addActionListener(e -> showInsertWindow());
+        viewButton.addActionListener(e -> showViewWindow());
+        viewAllButton.addActionListener(e -> showViewAllWindow());
+        updateButton.addActionListener(e -> showUpdateWindow());
+        exitButton.addActionListener(e -> System.exit(0));
+
+        panel.add(insertButton);
+        panel.add(viewButton);
+        panel.add(viewAllButton);
+        panel.add(updateButton);
+        panel.add(exitButton);
+
+        add(panel);
+    }
+
+    private void showInsertWindow() {
+        JFrame insertFrame = new JFrame("Insert Game");
+        insertFrame.setSize(300, 200);
+        insertFrame.setLocationRelativeTo(null);
+
+        JPanel panel = new JPanel(new GridLayout(5, 2));
+
+        JTextField gameNameField = new JTextField();
+        JTextField priceField = new JTextField();
+        JTextField forpField = new JTextField();
+        JTextField discField = new JTextField();
+
+        panel.add(new JLabel("Game Name:"));
+        panel.add(gameNameField);
+        panel.add(new JLabel("Price:"));
+        panel.add(priceField);
+        panel.add(new JLabel("Free or Paid (F/P):"));
+        panel.add(forpField);
+        panel.add(new JLabel("Discount Percentage:"));
+        panel.add(discField);
+
+        JButton insertButton = new JButton("Insert");
+        insertButton.addActionListener(e -> {
+            try {
+                String gameName = gameNameField.getText();
+                double price = Double.parseDouble(priceField.getText());
+                char forp = forpField.getText().toUpperCase().charAt(0);
+                double disc = Double.parseDouble(discField.getText());
+
+                Game newGame = new Game(gameName, price, forp, disc);
+                newGame.saveToDatabase();
+                games.add(newGame);
+
+                JOptionPane.showMessageDialog(insertFrame, "Game inserted successfully!");
+                insertFrame.dispose();
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(insertFrame, "Invalid input. Please enter valid values.");
+            }
+        });
+
+        panel.add(insertButton);
+
+        insertFrame.add(panel);
+        insertFrame.setVisible(true);
+    }
+
+    private void showViewWindow() {
+        JFrame viewFrame = new JFrame("View a Game");
+        viewFrame.setSize(300, 100);
+        viewFrame.setLocationRelativeTo(null);
+
+        String gameName = JOptionPane.showInputDialog(viewFrame, "Enter the Game Name:");
+
+        if (gameName != null) {
+            for (Game game : games) {
+                if (game.gameName.equalsIgnoreCase(gameName)) {
+                    game.display();
+                    viewFrame.dispose();
+                    return;
+                }
+            }
+
+            JOptionPane.showMessageDialog(viewFrame, "Game not found!");
+        }
+
+        viewFrame.dispose();
+    }
+
+    private void showViewAllWindow() {
+        JFrame viewAllFrame = new JFrame("View All Games");
+        viewAllFrame.setSize(400, 300);
+        viewAllFrame.setLocationRelativeTo(null);
+
+        JTextArea outputArea = new JTextArea();
+
+        for (Game game : games) {
+            outputArea.append("Game Name: " + game.gameName + "\n");
+            outputArea.append("Price: Rs." + game.price + "\n");
+            outputArea.append("Free or Paid: " + (game.forp == 'F' ? "Free" : "Paid") + "\n");
+            outputArea.append("Discount Percentage: " + game.disc + "%\n");
+            double discountedPrice = game.price - (game.price * game.disc / 100);
+            outputArea.append("Price after Discount: Rs." + discountedPrice + "\n\n");
+        }
+
+        JScrollPane scrollPane = new JScrollPane(outputArea);
+        viewAllFrame.add(scrollPane);
+
+        viewAllFrame.setVisible(true);
+    }
+
+    private void showUpdateWindow() {
+        JFrame updateFrame = new JFrame("Update Discount");
+        updateFrame.setSize(300, 150);
+        updateFrame.setLocationRelativeTo(null);
+
+        String gameName = JOptionPane.showInputDialog(updateFrame, "Enter the Game Name to update:");
+        if (gameName != null) {
+            String newDiscountStr = JOptionPane.showInputDialog(updateFrame, "Enter the new Discount Percentage:");
+            if (newDiscountStr != null) {
+                try {
+                    double newDiscount = Double.parseDouble(newDiscountStr);
+
+                    for (Game game : games) {
+                        if (game.gameName.equalsIgnoreCase(gameName)) {
+                            game.disc = newDiscount;
+                            // Update the database with the new discount
+                            try (Connection connection = DriverManager.getConnection("jdbc:sqlite:games.db")) {
+                                String query = "UPDATE games SET disc = ? WHERE id = ?";
+                                try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+                                    pstmt.setDouble(1, newDiscount);
+                                    pstmt.setInt(2, game.id);
+                                    pstmt.executeUpdate();
+                                }
+                            } catch (SQLException e) {
+                                e.printStackTrace();
+                            }
+
+                            JOptionPane.showMessageDialog(updateFrame, "Discount updated successfully!");
+                            updateFrame.dispose();
+                            return;
+                        }
+                    }
+
+                    JOptionPane.showMessageDialog(updateFrame, "Game not found!");
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(updateFrame, "Invalid input. Please enter a valid discount.");
+                }
+            }
+        }
+
+        updateFrame.dispose();
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Initialize the SQLite JDBC driver
+            Class.forName("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+
+        // Create the games table if it doesn't exist
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:games.db")) {
+            String createTableQuery = "CREATE TABLE IF NOT EXISTS games (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "gameName TEXT," +
+                    "price REAL," +
+                    "forp TEXT," +
+                    "disc REAL)";
+            try (PreparedStatement pstmt = connection.prepareStatement(createTableQuery)) {
+                pstmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        SwingUtilities.invokeLater(() -> new GameStoreGUI21().setVisible(true));
+    }
+}
